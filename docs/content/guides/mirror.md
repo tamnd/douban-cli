@@ -89,13 +89,20 @@ movie, TV, and celebrity detail that the desktop site seals behind a security
 challenge. The crawler routes each entity to the right source and paces each
 host separately, so the API and the web hosts each keep their own polite delay.
 
-The Frodo key and secret are built in but overridable, so they keep working if
-Douban rotates them:
+The Frodo host only answers requests that identify the app: it pairs the signed
+key with the app's User-Agent and rejects anything else with `invalid_apikey`.
+The crawler sends the right User-Agent automatically. The key, secret, and
+User-Agent are built in but overridable, so they keep working if Douban rotates
+them:
 
 ```bash
 douban crawl --frodo-key KEY --frodo-secret SECRET
-# or set DOUBAN_FRODO_KEY / DOUBAN_FRODO_SECRET
+# or set DOUBAN_FRODO_KEY / DOUBAN_FRODO_SECRET / DOUBAN_FRODO_UA
 ```
+
+Movie and TV share one URL space on `movie.douban.com/subject/`, so the crawler
+asks the movie endpoint first and retries the TV endpoint when the API says the
+id is a series. Both land as records; nothing is lost to the guess.
 
 ## Inspect
 

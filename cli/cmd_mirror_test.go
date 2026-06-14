@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tamnd/douban-cli/douban"
@@ -188,6 +189,24 @@ func TestResetFailedCommand(t *testing.T) {
 	}
 	if len(rows) != 1 {
 		t.Fatalf("pending after reset = %d, want 1", len(rows))
+	}
+}
+
+// TestFrodoClientKeepsAppUA guards the regression where the generic CLI
+// User-Agent was forced onto the Frodo client, which made the host answer
+// invalid_apikey (code 1062) and blocked every movie/TV/celebrity fetch. The
+// Frodo client must always carry an app UA, and honor DOUBAN_FRODO_UA for
+// rotation, regardless of the CLI --user-agent value.
+func TestFrodoClientKeepsAppUA(t *testing.T) {
+	a := &App{}
+	a.cfg.UserAgent = "douban-cli/test (generic)"
+	if ua := a.frodoClient().UserAgent(); !strings.Contains(ua, "com.douban.frodo") {
+		t.Errorf("frodo UA = %q, want the app UA, not the generic CLI UA", ua)
+	}
+
+	t.Setenv("DOUBAN_FRODO_UA", "api-client/1 com.douban.frodo/9.9.9(999) custom")
+	if ua := a.frodoClient().UserAgent(); ua != "api-client/1 com.douban.frodo/9.9.9(999) custom" {
+		t.Errorf("DOUBAN_FRODO_UA not honored, got %q", ua)
 	}
 }
 

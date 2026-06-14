@@ -57,7 +57,11 @@ func (a *App) frodoClient() *douban.FrodoClient {
 	cfg := douban.DefaultFrodoConfig()
 	cfg.APIKey = firstNonEmpty(a.frodoKey, os.Getenv("DOUBAN_FRODO_KEY"), cfg.APIKey)
 	cfg.Secret = firstNonEmpty(a.frodoSecret, os.Getenv("DOUBAN_FRODO_SECRET"), cfg.Secret)
-	cfg.UserAgent = a.cfg.UserAgent
+	// Frodo rejects any request whose User-Agent is not the app's
+	// (it answers invalid_apikey, code 1062), so the generic CLI UA must
+	// not leak onto these requests. Keep the Frodo app UA, overridable via
+	// DOUBAN_FRODO_UA for rotation, the same way the key and secret are.
+	cfg.UserAgent = firstNonEmpty(os.Getenv("DOUBAN_FRODO_UA"), cfg.UserAgent)
 	return douban.NewFrodoClient(cfg)
 }
 

@@ -48,6 +48,14 @@ func testServer() *httptest.Server {
 	mux.HandleFunc("/api/v2/elessar/subject/27260288", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id":"27260288","title":"演员","type":"personage"}`))
 	})
+	// A TV series rejects the /movie/ endpoint with code 996 and serves on /tv/.
+	mux.HandleFunc("/api/v2/movie/35651341", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":996,"msg":"invalid_request_996","request":"GET /api/v2/tv/35651341"}`))
+	})
+	mux.HandleFunc("/api/v2/tv/35651341", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"35651341","title":"三体","type":"tv"}`))
+	})
 	mux.HandleFunc("/api/v2/note/1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"code":1234,"msg":"need_login","request":"GET /api/v2/note/1"}`))
@@ -149,6 +157,37 @@ func TestEngineRun(t *testing.T) {
 }
 
 // TestEngineResume runs a second pass that picks up the link discovered in the
+// TestEngineMovieToTVFallback covers a TV series seeded from a
+// movie.douban.com/subject/ URL: the /movie/ endpoint answers code 996, and the
+// engine must retry /tv/ and record the entity as done rather than blocked.
+func TestEngineMovieToTVFallback(t *testing.T) {
+	srv := testServer()
+	defer srv.Close()
+
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = st.Close() }()
+
+	_, _ = st.Enqueue(store.Frontier{
+		URL: "https://movie.douban.com/subject/35651341/", EntityType: "movie", EntityID: "35651341", Source: store.SourceFrodo})
+
+	frodo := douban.NewFrodoClient(douban.FrodoConfig{BaseURL: srv.URL, Rate: 0, Retries: 0})
+	eng := New(st, rewriteClient{base: srv.URL}, frodo, Config{Concurrency: 1})
+
+	stats, err := eng.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Done != 1 || stats.Blocked != 0 {
+		t.Fatalf("done=%d blocked=%d, want done=1 blocked=0 (tv fallback)", stats.Done, stats.Blocked)
+	}
+	if rc, _ := st.RecordCounts(); rc["movie"] != 1 {
+		t.Errorf("tv series not recorded: %v", rc)
+	}
+}
+
 // first, confirming the frontier resumes cleanly.
 func TestEngineResume(t *testing.T) {
 	srv := testServer()
