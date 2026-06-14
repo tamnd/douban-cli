@@ -53,6 +53,11 @@ type App struct {
 	template string
 	limit    int
 	quiet    bool
+
+	// mirror flags
+	dataDir     string
+	frodoKey    string
+	frodoSecret string
 }
 
 // Root builds the root command and its subtree.
@@ -96,6 +101,12 @@ douban is an independent tool and is not affiliated with Douban.`,
 		app.chartCmd(),
 		app.nowplayingCmd(),
 		app.doulistCmd(),
+		app.seedCmd(),
+		app.crawlCmd(),
+		app.exportCmd(),
+		app.infoCmd(),
+		app.queueCmd(),
+		app.resetFailedCmd(),
 		newVersionCmd(),
 	)
 	return root
