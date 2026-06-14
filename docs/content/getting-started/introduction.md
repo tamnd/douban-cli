@@ -15,14 +15,21 @@ result. The **mirror** subsystem crawls the catalog into a local store so you
 can reconstruct Douban offline, keeping the raw page bytes and a normalized
 record per subject. See the [mirror guide](/guides/mirror/).
 
+The lookup commands are defined once and exposed over three surfaces: the CLI,
+an HTTP API (`douban serve`), and an MCP server (`douban mcp`). A script, a
+service, and an AI agent all reach the same records. See the
+[CLI reference](/reference/cli/).
+
 ## How it is built
 
 - A **library package** (`douban`) holds the HTTP client, the signed Frodo
   app-API client, and the typed data models. It paces requests, sets an honest
   User-Agent, and retries the transient failures any public site throws under
   load.
-- A **command tree** (`cli`) wraps the library in subcommands with shared
-  output formats and flags.
+- A **command tree** (`cli`) declares each lookup once as an operation on the
+  [any-cli/kit](https://github.com/tamnd/any-cli) framework, so the CLI, the
+  HTTP API, and the MCP server all derive from one registry with shared output
+  formats and flags.
 - A **mirror subsystem** (`mirror`) adds the crawler: a SQLite-backed frontier
   and record store, sitemap enumeration, a URL classifier, and a resumable
   crawl engine with per-host rate limiting.

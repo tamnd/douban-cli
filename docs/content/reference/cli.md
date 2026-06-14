@@ -57,17 +57,43 @@ Every command renders through one engine and shares these persistent flags:
 
 | Flag | Meaning |
 |---|---|
-| `-o, --output` | `table` (default), `markdown`, `json`, `jsonl`, `csv`, `tsv`, `url`, `raw` |
+| `-o, --output` | `auto` (default), `table`, `markdown`, `json`, `jsonl`, `csv`, `tsv`, `url`, `raw` |
 | `--color` | `auto` (default), `always`, `never`; honors `NO_COLOR` |
 | `--fields` | Comma-separated columns to keep |
 | `--no-header` | Drop the table/csv header row |
 | `--template` | Go text/template applied per record |
-| `--limit` | Cap the number of records |
-| `--delay` | Pause between paged requests |
+| `-n, --limit` | Stop after N records (0 = no limit) |
+| `--rate` | Minimum delay between requests |
 | `--timeout` | Per-request timeout |
-| `--retries` | Retries on 429/5xx |
+| `--retries` | Retry attempts on rate limit or 5xx |
 | `--user-agent` | Override the request User-Agent |
+| `--db` | Tee every record into a store (e.g. `out.db`) |
+| `--data-dir` | Override the data directory |
+| `--dry-run` | Print actions without performing them |
 | `-q, --quiet` | Suppress progress output |
+| `-v, --verbose` | Increase verbosity (repeatable) |
+
+`auto` output prints a table to a terminal and JSONL when piped, so the same
+command reads well by hand and parses well in a script.
+
+## HTTP and MCP surfaces
+
+The lookup commands are defined once and exposed over three surfaces, so a
+script, a service, or an AI agent reaches the same records without a new client.
+
+```
+douban serve --addr :8080     # HTTP: GET /v1/<command>?<flags as query params>
+douban mcp                     # MCP server over stdio
+```
+
+`douban serve` mounts each lookup command at `/v1/<command>`, with `/healthz`
+and the OpenAPI document at `/v1/openapi.json`. Flags become query parameters
+(`/v1/suggest?query=matrix&type=movie&limit=2`) and a positional argument can
+trail the path (`/v1/book/1084336`). Records stream as NDJSON. The mirror
+commands are CLI-only and do not appear on the HTTP or MCP surfaces.
+
+`douban mcp` speaks the Model Context Protocol over stdio, exposing the same
+seven lookup commands as MCP tools.
 
 ## What serves anonymously
 

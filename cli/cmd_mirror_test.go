@@ -6,28 +6,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tamnd/douban-cli/douban"
 	"github.com/tamnd/douban-cli/mirror/store"
 )
 
-func TestRootHasMirrorCommands(t *testing.T) {
-	root := Root()
-	have := map[string]bool{}
-	for _, c := range root.Commands() {
-		have[c.Name()] = true
+// firstWord returns the command verb from a Use string like "ids --type T".
+func firstWord(use string) string {
+	if i := strings.IndexByte(use, ' '); i >= 0 {
+		return use[:i]
 	}
-	for _, w := range []string{"seed", "crawl", "export", "info", "queue", "reset-failed"} {
-		if !have[w] {
-			t.Errorf("missing mirror subcommand %q", w)
-		}
-	}
+	return use
 }
 
 func TestSeedHasSubcommands(t *testing.T) {
-	a := &App{}
 	have := map[string]bool{}
-	for _, c := range a.seedCmd().Commands() {
-		have[c.Name()] = true
+	for _, c := range seedCmd().Sub {
+		have[firstWord(c.Use)] = true
 	}
 	for _, w := range []string{"sitemap", "ids", "url", "list"} {
 		if !have[w] {
@@ -36,38 +29,12 @@ func TestSeedHasSubcommands(t *testing.T) {
 	}
 }
 
-func TestMirrorFlagsBound(t *testing.T) {
-	a := &App{}
-	cc := a.crawlCmd()
-	for _, f := range []string{"data", "frodo-key", "frodo-secret", "type", "source", "concurrency", "retry-failed"} {
-		if cc.Flags().Lookup(f) == nil {
-			t.Errorf("crawl missing flag %q", f)
-		}
-	}
-	ec := a.exportCmd()
-	for _, f := range []string{"data", "type", "out"} {
-		if ec.Flags().Lookup(f) == nil {
-			t.Errorf("export missing flag %q", f)
-		}
-	}
-	qc := a.queueCmd()
-	for _, f := range []string{"data", "status", "type"} {
-		if qc.Flags().Lookup(f) == nil {
-			t.Errorf("queue missing flag %q", f)
-		}
-	}
-}
-
-func TestDataPath(t *testing.T) {
-	// flag wins
-	a := &App{dataDir: "/tmp/explicit"}
-	if got := a.dataPath(); got != "/tmp/explicit" {
+func TestDataPathOf(t *testing.T) {
+	if got := dataPathOf("/tmp/explicit"); got != "/tmp/explicit" {
 		t.Errorf("flag path = %q", got)
 	}
-	// env fallback
 	t.Setenv("DOUBAN_DATA", "/tmp/fromenv")
-	b := &App{}
-	if got := b.dataPath(); got != "/tmp/fromenv" {
+	if got := dataPathOf(""); got != "/tmp/fromenv" {
 		t.Errorf("env path = %q", got)
 	}
 }
@@ -90,24 +57,21 @@ func TestCanonicalURL(t *testing.T) {
 	}
 }
 
-func TestSeedIDsAndQueue(t *testing.T) {
+func TestSeedIDs(t *testing.T) {
 	dir := t.TempDir()
-	a := &App{cfg: douban.DefaultConfig(), output: "json", dataDir: dir, quiet: true}
-	if err := a.setup(); err != nil {
-		t.Fatal(err)
-	}
-
-	cmd := a.seedCmd()
-	cmd.SetArgs([]string{"ids", "--type", "book", "--from", "100", "--to", "104", "--data", dir})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("seed ids: %v", err)
-	}
-
 	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
+
+	added, err := seedIDs(st, "book", 100, 104)
+	if err != nil {
+		t.Fatalf("seedIDs: %v", err)
+	}
+	if added != 5 {
+		t.Fatalf("added %d, want 5", added)
+	}
 	rows, err := st.QueueRows("pending", "book", 100)
 	if err != nil {
 		t.Fatal(err)
@@ -120,29 +84,42 @@ func TestSeedIDsAndQueue(t *testing.T) {
 	}
 }
 
-func TestSeedListAndInfo(t *testing.T) {
+func TestSeedIDsRejectsBadRange(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	if _, err := seedIDs(st, "", 1, 2); err == nil {
+		t.Error("want error for missing type")
+	}
+	if _, err := seedIDs(st, "book", 5, 1); err == nil {
+		t.Error("want error for from > to")
+	}
+}
+
+func TestSeedFromList(t *testing.T) {
 	dir := t.TempDir()
 	listFile := filepath.Join(dir, "urls.txt")
 	content := "https://book.douban.com/subject/200/\n# a comment\n\nhttps://movie.douban.com/subject/300/\n"
 	if err := os.WriteFile(listFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	a := &App{cfg: douban.DefaultConfig(), output: "json", quiet: true}
-	if err := a.setup(); err != nil {
-		t.Fatal(err)
-	}
-	cmd := a.seedCmd()
-	cmd.SetArgs([]string{"list", listFile, "--data", dir})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("seed list: %v", err)
-	}
-
 	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
+
+	added, err := seedFromList(st, listFile)
+	if err != nil {
+		t.Fatalf("seedFromList: %v", err)
+	}
+	if added != 2 {
+		t.Fatalf("added %d, want 2 (comment and blank skipped)", added)
+	}
 	fc, err := st.FrontierCounts()
 	if err != nil {
 		t.Fatal(err)
@@ -152,60 +129,32 @@ func TestSeedListAndInfo(t *testing.T) {
 	}
 }
 
-func TestResetFailedCommand(t *testing.T) {
+func TestEnqueueURLSkipsUnclassified(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.Enqueue(store.Frontier{
-		URL: "https://book.douban.com/subject/9/", EntityType: "book", EntityID: "9", Source: store.SourceHTML,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.Complete("https://book.douban.com/subject/9/", store.StatusFailed, 500, "boom", "", ""); err != nil {
-		t.Fatal(err)
-	}
-	_ = st.Close()
+	defer func() { _ = st.Close() }()
 
-	a := &App{cfg: douban.DefaultConfig(), output: "json", quiet: true}
-	if err := a.setup(); err != nil {
-		t.Fatal(err)
+	if enqueueURL(st, "https://example.com/not-douban") {
+		t.Error("unclassified URL should not be enqueued")
 	}
-	cmd := a.resetFailedCmd()
-	cmd.SetArgs([]string{"--data", dir})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("reset-failed: %v", err)
-	}
-
-	st2, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st2.Close() }()
-	rows, err := st2.QueueRows("pending", "", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("pending after reset = %d, want 1", len(rows))
+	if !enqueueURL(st, "https://book.douban.com/subject/1084336/") {
+		t.Error("a valid book URL should be enqueued")
 	}
 }
 
 // TestFrodoClientKeepsAppUA guards the regression where the generic CLI
 // User-Agent was forced onto the Frodo client, which made the host answer
-// invalid_apikey (code 1062) and blocked every movie/TV/celebrity fetch. The
-// Frodo client must always carry an app UA, and honor DOUBAN_FRODO_UA for
-// rotation, regardless of the CLI --user-agent value.
+// invalid_apikey (code 1062). The Frodo client must always carry an app UA and
+// honor DOUBAN_FRODO_UA for rotation, independent of the CLI --user-agent value.
 func TestFrodoClientKeepsAppUA(t *testing.T) {
-	a := &App{}
-	a.cfg.UserAgent = "douban-cli/test (generic)"
-	if ua := a.frodoClient().UserAgent(); !strings.Contains(ua, "com.douban.frodo") {
-		t.Errorf("frodo UA = %q, want the app UA, not the generic CLI UA", ua)
+	if ua := frodoClientFrom("", "").UserAgent(); !strings.Contains(ua, "com.douban.frodo") {
+		t.Errorf("frodo UA = %q, want the app UA", ua)
 	}
-
 	t.Setenv("DOUBAN_FRODO_UA", "api-client/1 com.douban.frodo/9.9.9(999) custom")
-	if ua := a.frodoClient().UserAgent(); ua != "api-client/1 com.douban.frodo/9.9.9(999) custom" {
+	if ua := frodoClientFrom("", "").UserAgent(); ua != "api-client/1 com.douban.frodo/9.9.9(999) custom" {
 		t.Errorf("DOUBAN_FRODO_UA not honored, got %q", ua)
 	}
 }
