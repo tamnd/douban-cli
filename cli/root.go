@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -60,8 +61,9 @@ func Root() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "douban",
-		Short: "Search Douban books, movies, and music (豆瓣)",
-		Long: `douban reads Douban (豆瓣) through its public search pages.
+		Short: "Crawl Douban (豆瓣) books and movies into structured records",
+		Long: `douban reads Douban (豆瓣) through its public pages: search, suggest,
+book detail, the film charts, now-playing, and curated lists (豆列).
 No API key is required. It returns records as table, JSON, JSONL,
 CSV, TSV, or URLs.
 
@@ -88,6 +90,12 @@ douban is an independent tool and is not affiliated with Douban.`,
 
 	root.AddCommand(
 		app.searchCmd(),
+		app.suggestCmd(),
+		app.bookCmd(),
+		app.top250Cmd(),
+		app.chartCmd(),
+		app.nowplayingCmd(),
+		app.doulistCmd(),
 		newVersionCmd(),
 	)
 	return root
@@ -135,4 +143,13 @@ func (a *App) effectiveLimit(def int) int {
 		return a.limit
 	}
 	return def
+}
+
+// fail maps a library error to a process exit: a not-found becomes exit 3
+// (empty), anything else exit 1.
+func (a *App) fail(err error) error {
+	if errors.Is(err, douban.ErrNotFound) {
+		return codeError(exitNoData, nil)
+	}
+	return codeError(exitError, err)
 }

@@ -1,18 +1,24 @@
 // Package douban is the library behind the douban command: the HTTP client,
 // request shaping, and typed data models for Douban (豆瓣).
 //
-// The client fetches Douban subject-search pages over HTTPS and extracts
-// structured results from the embedded window.__DATA__ JSON. No API key or
-// authentication is required. It sets a real User-Agent, paces requests, and
-// retries transient 429/5xx errors with exponential backoff.
+// The client reads Douban through the public web surfaces that serve without a
+// login: subject search, the j/subject_suggest JSON endpoints, book subject
+// pages, the Top 250 / chart / now-playing film lists, and curated doulists. No
+// API key or authentication is required. It sets a real User-Agent, paces
+// requests, and retries transient 429/5xx errors with exponential backoff.
+//
+// Douban's subdomains differ in anti-bot posture: book subject pages serve
+// fully, but movie subject and celebrity pages redirect to a sec.douban.com
+// challenge. Film data is therefore reached through suggest and the list pages
+// rather than per-film detail pages.
 package douban
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 )
@@ -20,8 +26,14 @@ import (
 // DefaultUserAgent is the browser-like User-Agent sent with every request.
 const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+// ErrNotFound is returned when Douban has no subject, list, or page for an id.
+var ErrNotFound = errors.New("douban: not found")
+
 // Config holds constructor parameters.
 type Config struct {
+	// BaseURL overrides the host for tests. When empty the client talks to the
+	// real https://<sub>.douban.com subdomains; when set, every host resolves to
+	// this single base and is dispatched by path.
 	BaseURL   string
 	UserAgent string
 	Rate      time.Duration
@@ -32,7 +44,6 @@ type Config struct {
 // DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		BaseURL:   "https://search.douban.com",
 		UserAgent: DefaultUserAgent,
 		Rate:      500 * time.Millisecond,
 		Retries:   3,
@@ -40,7 +51,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Client talks to Douban's search pages.
+// Client talks to Douban's public web surfaces.
 type Client struct {
 	cfg        Config
 	httpClient *http.Client
@@ -56,79 +67,13 @@ func NewClient(cfg Config) *Client {
 	}
 }
 
-// Search fetches Douban search results for query and searchType.
-// searchType must be one of "book", "movie", or "music".
-// Up to limit results are returned; pass 0 to use a reasonable default (15).
-func (c *Client) Search(ctx context.Context, query, searchType string, limit int) ([]Result, error) {
-	if limit <= 0 {
-		limit = 15
+// host returns the base URL for a Douban subdomain ("search", "movie", "book",
+// "www"). When cfg.BaseURL is set (tests) every subdomain maps to it.
+func (c *Client) host(sub string) string {
+	if c.cfg.BaseURL != "" {
+		return c.cfg.BaseURL
 	}
-
-	endpoint, cat, err := searchEndpoint(c.cfg.BaseURL, searchType)
-	if err != nil {
-		return nil, err
-	}
-
-	u := fmt.Sprintf("%s?search_text=%s&cat=%s", endpoint, url.QueryEscape(query), cat)
-	body, err := c.get(ctx, u)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := extractData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	var results []Result
-	rank := 0
-	for _, item := range data.Items {
-		if item.TplName != "search_subject" {
-			continue
-		}
-		rank++
-		results = append(results, toResult(item, rank))
-		if rank >= limit {
-			break
-		}
-	}
-	return results, nil
-}
-
-// searchEndpoint returns the path prefix and cat code for searchType.
-func searchEndpoint(baseURL, searchType string) (string, string, error) {
-	switch searchType {
-	case "book", "":
-		return baseURL + "/book/subject_search", "1001", nil
-	case "movie":
-		return baseURL + "/movie/subject_search", "1002", nil
-	case "music":
-		return baseURL + "/music/subject_search", "1003", nil
-	default:
-		return "", "", fmt.Errorf("douban: unknown type %q (want book, movie, or music)", searchType)
-	}
-}
-
-// toResult converts a wire item to a Result.
-func toResult(item doubanItem, rank int) Result {
-	rating := "-"
-	if item.Rating.Value != 0 {
-		rating = fmt.Sprintf("%.1f (%d)", item.Rating.Value, item.Rating.Count)
-	}
-
-	abstract := item.Abstract
-	if len([]rune(abstract)) > 100 {
-		runes := []rune(abstract)
-		abstract = string(runes[:100]) + "…"
-	}
-
-	return Result{
-		Rank:     rank,
-		Title:    item.Title,
-		Rating:   rating,
-		Abstract: abstract,
-		URL:      item.URL,
-	}
+	return "https://" + sub + ".douban.com"
 }
 
 // get fetches a URL and returns the body, pacing and retrying as configured.
@@ -161,7 +106,7 @@ func (c *Client) do(ctx context.Context, rawURL string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	req.Header.Set("User-Agent", c.cfg.UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/json")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 
 	resp, err := c.httpClient.Do(req)
@@ -170,10 +115,12 @@ func (c *Client) do(ctx context.Context, rawURL string) ([]byte, bool, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
 		return nil, true, fmt.Errorf("http %d", resp.StatusCode)
-	}
-	if resp.StatusCode != http.StatusOK {
+	case resp.StatusCode == http.StatusNotFound:
+		return nil, false, ErrNotFound
+	case resp.StatusCode != http.StatusOK:
 		return nil, false, fmt.Errorf("http %d", resp.StatusCode)
 	}
 
