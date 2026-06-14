@@ -280,8 +280,14 @@ func (a *App) enqueueURL(st *store.Store, rawURL string) bool {
 	if !ok {
 		return false
 	}
+	// Seed the canonical URL so a pasted sub-page (/comments, /reviews) seeds
+	// the entity itself, matching how discovered links are enqueued.
+	url := c.Canonical
+	if url == "" {
+		url = rawURL
+	}
 	added, err := st.Enqueue(store.Frontier{
-		URL: rawURL, EntityType: c.EntityType, EntityID: c.EntityID, Source: c.Source,
+		URL: url, EntityType: c.EntityType, EntityID: c.EntityID, Source: c.Source,
 	})
 	return err == nil && added
 }
@@ -584,47 +590,10 @@ func firstType(types []string) string {
 
 // canonicalURL builds the canonical Douban URL for an entity id, used by id-range
 // seeding. The classifier then derives the source from the URL.
+// canonicalURL delegates to the mirror package, the single source of truth for
+// the one URL that represents an entity.
 func canonicalURL(typ, id string) (string, bool) {
-	switch typ {
-	case "book":
-		return "https://book.douban.com/subject/" + id + "/", true
-	case "movie", "tv":
-		return "https://movie.douban.com/subject/" + id + "/", true
-	case "music":
-		return "https://music.douban.com/subject/" + id + "/", true
-	case "thing":
-		return "https://9.douban.com/subject/" + id + "/", true
-	case "subject":
-		return "https://www.douban.com/subject/" + id + "/", true
-	case "game":
-		return "https://www.douban.com/game/" + id + "/", true
-	case "celebrity":
-		return "https://movie.douban.com/celebrity/" + id + "/", true
-	case "musician":
-		return "https://music.douban.com/musician/" + id + "/", true
-	case "personage":
-		return "https://www.douban.com/personage/" + id + "/", true
-	case "doulist":
-		return "https://www.douban.com/doulist/" + id + "/", true
-	case "drama":
-		return "https://www.douban.com/location/drama/" + id + "/", true
-	case "people":
-		return "https://www.douban.com/people/" + id + "/", true
-	case "group-topic":
-		return "https://www.douban.com/group/topic/" + id + "/", true
-	case "group":
-		return "https://www.douban.com/group/" + id + "/", true
-	case "event":
-		return "https://www.douban.com/event/" + id + "/", true
-	case "note":
-		return "https://www.douban.com/note/" + id + "/", true
-	case "review":
-		return "https://movie.douban.com/review/" + id + "/", true
-	case "photo-album":
-		return "https://www.douban.com/photos/album/" + id + "/", true
-	default:
-		return "", false
-	}
+	return mirror.CanonicalURL(typ, id)
 }
 
 func sortedKeys[V any](m map[string]V) []string {

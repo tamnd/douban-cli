@@ -77,9 +77,14 @@ the next `crawl` picks up where it left off. `--limit` bounds a single pass;
 without it, the crawl drains everything pending.
 
 It never silently caps. URLs it cannot fetch are recorded with an honest status:
-`blocked` (a sealed surface or a rejected API key), `skipped` (not found), or
-`failed` (a transient error you can retry). Watch progress on stderr, or run
-quiet with `-q`.
+`blocked` (a sealed surface, a login wall, or an HTTP 403), `skipped` (not
+found, an HTTP 404), or `failed` (a transient error you can retry). Watch
+progress on stderr, or run quiet with `-q`.
+
+Discovered links collapse onto the entity they belong to: a subject's
+`/comments`, `/reviews` and `/new_review` sub-pages all resolve to the one
+canonical subject URL, so each entity is fetched once and the login-gated action
+pages are never requested.
 
 ### Sources and the Frodo key
 

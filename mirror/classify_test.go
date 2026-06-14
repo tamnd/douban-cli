@@ -49,6 +49,29 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+// TestClassifyCanonical checks that an entity's sub-pages all resolve to the
+// one canonical URL, so /comments, /reviews and /new_review collapse onto a
+// single frontier row instead of each becoming a separate, login-gated fetch.
+func TestClassifyCanonical(t *testing.T) {
+	cases := map[string]string{
+		"https://book.douban.com/subject/1084336/":             "https://book.douban.com/subject/1084336/",
+		"https://book.douban.com/subject/1084336/comments":     "https://book.douban.com/subject/1084336/",
+		"https://book.douban.com/subject/1084336/new_review":   "https://book.douban.com/subject/1084336/",
+		"https://movie.douban.com/subject/1292052/reviews?x=1": "https://movie.douban.com/subject/1292052/",
+		"https://movie.douban.com/celebrity/1601851/photos/":   "https://movie.douban.com/celebrity/1601851/",
+	}
+	for in, want := range cases {
+		got, ok := Classify(in)
+		if !ok {
+			t.Errorf("Classify(%q) no match", in)
+			continue
+		}
+		if got.Canonical != want {
+			t.Errorf("Classify(%q).Canonical = %q, want %q", in, got.Canonical, want)
+		}
+	}
+}
+
 func TestClassifyRejectsNonDouban(t *testing.T) {
 	for _, u := range []string{
 		"https://example.com/subject/1/",

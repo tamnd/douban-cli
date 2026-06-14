@@ -230,6 +230,12 @@ func (e *Engine) fetchHTML(ctx context.Context, f store.Frontier) outcome {
 	case errors.Is(err, douban.ErrNotFound):
 		_ = e.store.Complete(f.URL, store.StatusSkipped, 404, "not found", "", "")
 		return outcome{skipped: 1}
+	case errors.Is(err, douban.ErrForbidden):
+		// A 403 is a wall (login-gated or anti-bot), not a transient error;
+		// record it as blocked so reset-failed does not retry it forever.
+		e.cfg.Logf("blocked %s/%s: http 403", f.EntityType, f.EntityID)
+		_ = e.store.Complete(f.URL, store.StatusBlocked, 403, "http 403", "", "")
+		return outcome{blocked: 1}
 	case err != nil:
 		_ = e.store.Complete(f.URL, store.StatusFailed, 0, err.Error(), "", "")
 		return outcome{failed: 1}
@@ -278,8 +284,16 @@ func (e *Engine) expand(pageURL string, body []byte) int {
 		if !ok {
 			continue
 		}
+		// Enqueue the entity's canonical URL, not the discovered href, so a
+		// subject's sub-pages (/comments, /reviews, /new_review) collapse onto
+		// one row that is fetched once, instead of each becoming a separate,
+		// often login-gated, request.
+		enqURL := c.Canonical
+		if enqURL == "" {
+			enqURL = abs
+		}
 		ins, err := e.store.Enqueue(store.Frontier{
-			URL: abs, EntityType: c.EntityType, EntityID: c.EntityID, Source: c.Source,
+			URL: enqURL, EntityType: c.EntityType, EntityID: c.EntityID, Source: c.Source,
 		})
 		if err == nil && ins {
 			added++

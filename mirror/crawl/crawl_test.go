@@ -36,6 +36,9 @@ func (rc rewriteClient) Get(ctx context.Context, raw string) ([]byte, error) {
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, douban.ErrNotFound
 	}
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, douban.ErrForbidden
+	}
 	return io.ReadAll(resp.Body)
 }
 
@@ -60,13 +63,19 @@ func testServer() *httptest.Server {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"code":1234,"msg":"need_login","request":"GET /api/v2/note/1"}`))
 	})
-	// HTML book page with a link to another entity and a non-entity link.
+	// HTML book page with a link to another entity, a sub-page link that must
+	// collapse to the canonical subject, and a non-entity link.
 	mux.HandleFunc("/subject/1084336/", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><body>
 			<h1>未来简史</h1>
 			<a href="https://music.douban.com/subject/999/">a soundtrack</a>
+			<a href="https://music.douban.com/subject/999/reviews?sort=new">its reviews</a>
 			<a href="https://book.douban.com/tag/小说">tag browse</a>
 		</body></html>`))
+	})
+	// A login-gated people profile answers 403.
+	mux.HandleFunc("/people/777/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
 	})
 	return httptest.NewServer(mux)
 }
@@ -157,6 +166,36 @@ func TestEngineRun(t *testing.T) {
 }
 
 // TestEngineResume runs a second pass that picks up the link discovered in the
+// TestEngineForbiddenIsBlocked checks that a 403 (a wall, login-gated or
+// anti-bot) is recorded as blocked, not failed, so reset-failed does not churn
+// on it forever.
+func TestEngineForbiddenIsBlocked(t *testing.T) {
+	srv := testServer()
+	defer srv.Close()
+
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = st.Close() }()
+
+	_, _ = st.Enqueue(store.Frontier{
+		URL: "https://www.douban.com/people/777/", EntityType: "people", EntityID: "777", Source: store.SourceHTML})
+
+	eng := New(st, rewriteClient{base: srv.URL}, nil, Config{Concurrency: 1, HTMLDelay: 0})
+	stats, err := eng.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Blocked != 1 || stats.Failed != 0 {
+		t.Fatalf("blocked=%d failed=%d, want blocked=1 failed=0", stats.Blocked, stats.Failed)
+	}
+	rows, _ := st.QueueRows("blocked", "people", 10)
+	if len(rows) != 1 || rows[0].HTTPStatus != 403 {
+		t.Errorf("blocked row = %+v, want one with http 403", rows)
+	}
+}
+
 // TestEngineMovieToTVFallback covers a TV series seeded from a
 // movie.douban.com/subject/ URL: the /movie/ endpoint answers code 996, and the
 // engine must retry /tv/ and record the entity as done rather than blocked.

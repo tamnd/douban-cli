@@ -18,12 +18,15 @@ const (
 )
 
 // Class is the result of routing a URL: what entity it is, its id, and which
-// source should fetch it.
+// source should fetch it. Canonical is the one URL that represents the entity,
+// so sub-pages (/comments, /reviews, /new_review) collapse onto a single
+// frontier row instead of each becoming a separate, often login-gated, fetch.
 type Class struct {
 	EntityType string
 	EntityID   string
 	Source     string
 	Host       string
+	Canonical  string
 }
 
 // rule maps a host + path prefix to an entity type and its preferred source.
@@ -77,8 +80,55 @@ func Classify(rawURL string) (Class, bool) {
 			continue
 		}
 		if m := r.re.FindStringSubmatch(path); m != nil {
-			return Class{EntityType: r.typ, EntityID: m[1], Source: r.src, Host: host}, true
+			canon, _ := CanonicalURL(r.typ, m[1])
+			return Class{EntityType: r.typ, EntityID: m[1], Source: r.src, Host: host, Canonical: canon}, true
 		}
 	}
 	return Class{}, false
+}
+
+// CanonicalURL returns the single representative URL for an entity, the one a
+// sub-page collapses onto. It is the source of truth for both seeding an id
+// range and normalizing discovered links. ok is false for unknown types.
+func CanonicalURL(typ, id string) (string, bool) {
+	switch typ {
+	case "book":
+		return "https://book.douban.com/subject/" + id + "/", true
+	case "movie", "tv":
+		return "https://movie.douban.com/subject/" + id + "/", true
+	case "music":
+		return "https://music.douban.com/subject/" + id + "/", true
+	case "thing":
+		return "https://9.douban.com/subject/" + id + "/", true
+	case "subject":
+		return "https://www.douban.com/subject/" + id + "/", true
+	case "game":
+		return "https://www.douban.com/game/" + id + "/", true
+	case "celebrity":
+		return "https://movie.douban.com/celebrity/" + id + "/", true
+	case "musician":
+		return "https://music.douban.com/musician/" + id + "/", true
+	case "personage":
+		return "https://www.douban.com/personage/" + id + "/", true
+	case "doulist":
+		return "https://www.douban.com/doulist/" + id + "/", true
+	case "drama":
+		return "https://www.douban.com/location/drama/" + id + "/", true
+	case "people":
+		return "https://www.douban.com/people/" + id + "/", true
+	case "group-topic":
+		return "https://www.douban.com/group/topic/" + id + "/", true
+	case "group":
+		return "https://www.douban.com/group/" + id + "/", true
+	case "event":
+		return "https://www.douban.com/event/" + id + "/", true
+	case "note":
+		return "https://www.douban.com/note/" + id + "/", true
+	case "review":
+		return "https://movie.douban.com/review/" + id + "/", true
+	case "photo-album":
+		return "https://www.douban.com/photos/album/" + id + "/", true
+	default:
+		return "", false
+	}
 }
