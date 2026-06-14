@@ -76,6 +76,14 @@ func (c *Client) host(sub string) string {
 	return "https://" + sub + ".douban.com"
 }
 
+// Get fetches a URL and returns the body, pacing and retrying as configured.
+// It is the exported entry point used by the mirror crawler to fetch arbitrary
+// Douban URLs (sitemaps, subject pages); the lookup commands use the typed
+// helpers built on the same internal get.
+func (c *Client) Get(ctx context.Context, rawURL string) ([]byte, error) {
+	return c.get(ctx, rawURL)
+}
+
 // get fetches a URL and returns the body, pacing and retrying as configured.
 func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 	var lastErr error

@@ -193,6 +193,58 @@ func (s *Store) NextPending(limit int) ([]Frontier, error) {
 	return out, rows.Err()
 }
 
+// Pending returns up to limit pending rows, optionally filtered to the given
+// entity types and/or source, highest priority first. An empty types slice and
+// empty source mean "any". Like NextPending, callers coordinate dequeueing.
+func (s *Store) Pending(types []string, source string, limit int) ([]Frontier, error) {
+	q := `SELECT url, entity_type, entity_id, source, status, attempts, priority
+		FROM frontier WHERE status = ?`
+	args := []any{StatusPending}
+	if len(types) > 0 {
+		q += " AND entity_type IN (" + placeholders(len(types)) + ")"
+		for _, t := range types {
+			args = append(args, t)
+		}
+	}
+	if source != "" {
+		q += " AND source = ?"
+		args = append(args, source)
+	}
+	q += " ORDER BY priority DESC, rowid ASC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: pending: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Frontier
+	for rows.Next() {
+		var f Frontier
+		if err := rows.Scan(&f.URL, &f.EntityType, &f.EntityID, &f.Source,
+			&f.Status, &f.Attempts, &f.Priority); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	b := make([]byte, 0, n*2-1)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = append(b, '?')
+	}
+	return string(b)
+}
+
 // Complete marks a URL with a terminal (or retryable) status, recording the HTTP
 // status, any error, the raw artifact path and hash, and bumping the attempt
 // count. The fetched_at timestamp is set for done/blocked/skipped.
