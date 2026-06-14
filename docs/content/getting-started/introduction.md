@@ -4,9 +4,9 @@ description: "What douban is and how it is put together."
 weight: 10
 ---
 
-Search Douban books, movies, and music (豆瓣)
+Crawl Douban (豆瓣) books and movies into structured JSON
 
-douban is a single binary. It speaks to douban-cli over plain HTTPS,
+douban is a single binary. It reads Douban's public pages over plain HTTPS,
 shapes the responses into clean records, and gets out of your way. There is
 nothing to sign up for and nothing to run alongside it.
 
@@ -21,9 +21,15 @@ nothing to sign up for and nothing to run alongside it.
 
 ## Scope
 
-douban is a read-only client over data douban-cli already serves
-publicly. It reads that data and shapes it for you. That narrow scope keeps it a
-single small binary with no database, no daemon, and no setup.
+douban is a read-only client over data Douban already serves publicly. It
+reads that data and shapes it for you. That narrow scope keeps it a single
+small binary with no database, no daemon, and no setup.
+
+Douban gates its surfaces unevenly. Book subject pages and the search,
+suggest, chart, now-playing and doulist surfaces serve fully over anonymous
+HTTPS. Movie subject and celebrity detail pages redirect to a security
+challenge, so movie detail is reached through `suggest` and the list commands
+rather than a per-subject fetch.
 
 Next: [install it](/getting-started/installation/), then take the
 [quick start](/getting-started/quick-start/).

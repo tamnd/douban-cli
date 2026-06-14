@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -88,6 +89,12 @@ douban is an independent tool and is not affiliated with Douban.`,
 
 	root.AddCommand(
 		app.searchCmd(),
+		app.suggestCmd(),
+		app.bookCmd(),
+		app.top250Cmd(),
+		app.chartCmd(),
+		app.nowplayingCmd(),
+		app.doulistCmd(),
 		newVersionCmd(),
 	)
 	return root
@@ -135,4 +142,13 @@ func (a *App) effectiveLimit(def int) int {
 		return a.limit
 	}
 	return def
+}
+
+// fail maps a library error to a process exit: a not-found becomes exit 3
+// (empty), anything else exit 1.
+func (a *App) fail(err error) error {
+	if errors.Is(err, douban.ErrNotFound) {
+		return codeError(exitNoData, nil)
+	}
+	return codeError(exitError, err)
 }
