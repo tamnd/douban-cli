@@ -32,8 +32,11 @@ const (
 	// They can be overridden via FrodoConfig (or CLI flags) if Douban rotates them.
 	DefaultFrodoKey    = "0dad551ec0f84ed02907ff5c42e8ec70"
 	DefaultFrodoSecret = "bf7dddc7c9cfe6f7"
-	// DefaultFrodoUA is the Frodo Android client User-Agent.
-	DefaultFrodoUA = "com.douban.frodo/7.21.0(214) Android/29 product/blueline vendor/Google model/Pixel 3 rom/android network/wifi  platform/mobile nd/1"
+	// DefaultFrodoUA is the Frodo Android client User-Agent. The host rejects
+	// any request whose UA does not identify the app (it answers
+	// invalid_apikey, code 1062), so this string is not cosmetic. The
+	// "api-client/1 " prefix matches the form the live app sends.
+	DefaultFrodoUA = "api-client/1 com.douban.frodo/7.21.0(214) Android/29 product/blueline vendor/Google model/Pixel 3 rom/android network/wifi  platform/mobile nd/1"
 )
 
 // FrodoConfig configures a FrodoClient.
@@ -125,6 +128,12 @@ func (f *FrodoClient) base() string {
 		return f.cfg.BaseURL
 	}
 	return DefaultFrodoBase
+}
+
+// UserAgent returns the User-Agent the client sends. Frodo rejects requests
+// that do not identify the app, so this must remain an app UA.
+func (f *FrodoClient) UserAgent() string {
+	return f.cfg.UserAgent
 }
 
 // signedURL builds the full signed request URL for path with extra params.

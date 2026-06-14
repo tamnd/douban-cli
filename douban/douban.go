@@ -29,6 +29,11 @@ const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 // ErrNotFound is returned when Douban has no subject, list, or page for an id.
 var ErrNotFound = errors.New("douban: not found")
 
+// ErrForbidden is returned for a 403, which on Douban means a wall (login-gated
+// or anti-bot) rather than a transient error. Callers record it as blocked so
+// it is not retried like a recoverable failure.
+var ErrForbidden = errors.New("douban: forbidden")
+
 // Config holds constructor parameters.
 type Config struct {
 	// BaseURL overrides the host for tests. When empty the client talks to the
@@ -128,6 +133,8 @@ func (c *Client) do(ctx context.Context, rawURL string) ([]byte, bool, error) {
 		return nil, true, fmt.Errorf("http %d", resp.StatusCode)
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, false, ErrNotFound
+	case resp.StatusCode == http.StatusForbidden:
+		return nil, false, ErrForbidden
 	case resp.StatusCode != http.StatusOK:
 		return nil, false, fmt.Errorf("http %d", resp.StatusCode)
 	}

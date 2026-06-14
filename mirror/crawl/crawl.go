@@ -172,6 +172,15 @@ func (e *Engine) fetchFrodo(ctx context.Context, f store.Frontier) outcome {
 		return outcome{blocked: 1}
 	}
 	body, err := e.frodo.Get(ctx, path, nil)
+	// The movie.douban.com/subject/ space does not distinguish films from TV
+	// series, so a TV id requested on /movie/ comes back as code 996 with the
+	// correct endpoint named in the error. Retry the sibling /tv/ path so TV
+	// series are captured instead of recorded as blocked.
+	if alt, ok := frodoMediaAlt(f.EntityType, f.EntityID, err); ok {
+		if b2, err2 := e.frodo.Get(ctx, alt, nil); err2 == nil {
+			body, err = b2, nil
+		}
+	}
 	switch {
 	case errors.Is(err, douban.ErrNotFound):
 		_ = e.store.Complete(f.URL, store.StatusSkipped, 404, "not found", "", "")
@@ -221,6 +230,12 @@ func (e *Engine) fetchHTML(ctx context.Context, f store.Frontier) outcome {
 	case errors.Is(err, douban.ErrNotFound):
 		_ = e.store.Complete(f.URL, store.StatusSkipped, 404, "not found", "", "")
 		return outcome{skipped: 1}
+	case errors.Is(err, douban.ErrForbidden):
+		// A 403 is a wall (login-gated or anti-bot), not a transient error;
+		// record it as blocked so reset-failed does not retry it forever.
+		e.cfg.Logf("blocked %s/%s: http 403", f.EntityType, f.EntityID)
+		_ = e.store.Complete(f.URL, store.StatusBlocked, 403, "http 403", "", "")
+		return outcome{blocked: 1}
 	case err != nil:
 		_ = e.store.Complete(f.URL, store.StatusFailed, 0, err.Error(), "", "")
 		return outcome{failed: 1}
@@ -269,8 +284,16 @@ func (e *Engine) expand(pageURL string, body []byte) int {
 		if !ok {
 			continue
 		}
+		// Enqueue the entity's canonical URL, not the discovered href, so a
+		// subject's sub-pages (/comments, /reviews, /new_review) collapse onto
+		// one row that is fetched once, instead of each becoming a separate,
+		// often login-gated, request.
+		enqURL := c.Canonical
+		if enqURL == "" {
+			enqURL = abs
+		}
 		ins, err := e.store.Enqueue(store.Frontier{
-			URL: abs, EntityType: c.EntityType, EntityID: c.EntityID, Source: c.Source,
+			URL: enqURL, EntityType: c.EntityType, EntityID: c.EntityID, Source: c.Source,
 		})
 		if err == nil && ins {
 			added++
@@ -279,9 +302,11 @@ func (e *Engine) expand(pageURL string, body []byte) int {
 	return added
 }
 
-// frodoPath maps an entity to its signed API path. The media and personage
-// routes are verified; note/review/celebrity are best effort and may come back
-// not-found or blocked, which the engine records faithfully.
+// frodoPath maps an entity to its signed API path. Movie, tv, book, music,
+// game, celebrity and personage are verified against the live API; a tv id is
+// requested on /movie/ first and falls back to /tv/ via frodoMediaAlt. Note and
+// review are best effort and may come back not-found or blocked (notes sit
+// behind a JS challenge), which the engine records faithfully.
 func frodoPath(typ, id string) (string, bool) {
 	switch typ {
 	case "movie", "tv":
@@ -300,6 +325,22 @@ func frodoPath(typ, id string) (string, bool) {
 		return "/api/v2/review/" + id, true
 	case "celebrity":
 		return "/api/v2/celebrity/" + id, true
+	default:
+		return "", false
+	}
+}
+
+// frodoMediaAlt returns the sibling media path to retry when the Frodo API
+// rejected a movie/tv subject as being on the wrong endpoint (code 996). Both
+// movie and tv subjects are first tried on /movie/, so the alternate is /tv/.
+func frodoMediaAlt(typ, id string, err error) (string, bool) {
+	var fe *douban.FrodoError
+	if !errors.As(err, &fe) || fe.Code != 996 {
+		return "", false
+	}
+	switch typ {
+	case "movie", "tv":
+		return "/api/v2/tv/" + id, true
 	default:
 		return "", false
 	}
