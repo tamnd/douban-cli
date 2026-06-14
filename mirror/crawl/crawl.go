@@ -192,10 +192,14 @@ func (e *Engine) fetchFrodo(ctx context.Context, f store.Frontier) outcome {
 		_ = e.store.Complete(f.URL, store.StatusFailed, 200, err.Error(), "", "")
 		return outcome{failed: 1}
 	}
-	if json.Valid(body) {
+	rec, nerr := mirror.NormalizeFrodo(f.EntityType, f.EntityID, f.URL, body)
+	if nerr != nil && json.Valid(body) {
+		rec = json.RawMessage(body) // fall back to raw if it is not an object
+	}
+	if rec != nil {
 		_ = e.store.PutRecord(store.Record{
 			EntityType: f.EntityType, EntityID: f.EntityID,
-			Source: store.SourceFrodo, JSON: json.RawMessage(body),
+			Source: store.SourceFrodo, JSON: rec,
 		})
 	}
 	_ = e.store.Complete(f.URL, store.StatusDone, 200, "", rel, hash)
@@ -227,15 +231,10 @@ func (e *Engine) fetchHTML(ctx context.Context, f store.Frontier) outcome {
 		_ = e.store.Complete(f.URL, store.StatusFailed, 200, err.Error(), "", "")
 		return outcome{failed: 1}
 	}
-	stub, _ := json.Marshal(map[string]string{
-		"entity_type": f.EntityType,
-		"entity_id":   f.EntityID,
-		"url":         f.URL,
-		"source":      store.SourceHTML,
-	})
 	_ = e.store.PutRecord(store.Record{
 		EntityType: f.EntityType, EntityID: f.EntityID,
-		Source: store.SourceHTML, JSON: stub,
+		Source: store.SourceHTML,
+		JSON:   mirror.NormalizeHTML(f.EntityType, f.EntityID, f.URL, body),
 	})
 
 	discovered := e.expand(f.URL, body)
