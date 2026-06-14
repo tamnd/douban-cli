@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/tamnd/douban-cli/douban"
+	"github.com/tamnd/douban-cli/pkg/render"
 )
 
 // Build metadata, set via -ldflags at release time.
@@ -48,6 +50,7 @@ type App struct {
 	cfg    douban.Config
 
 	output   string
+	color    string
 	fields   []string
 	noHeader bool
 	template string
@@ -81,7 +84,8 @@ douban is an independent tool and is not affiliated with Douban.`,
 	}
 
 	pf := root.PersistentFlags()
-	pf.StringVarP(&app.output, "output", "o", "auto", "output: table|json|jsonl|csv|tsv|url (auto=table on TTY, jsonl piped)")
+	pf.StringVarP(&app.output, "output", "o", "auto", "output: table|markdown|json|jsonl|csv|tsv|url|raw (auto=table on TTY, jsonl piped)")
+	pf.StringVar(&app.color, "color", "auto", "color: auto|always|never (auto colors a terminal, honors NO_COLOR)")
 	pf.StringSliceVar(&app.fields, "fields", nil, "comma-separated columns to include")
 	pf.BoolVar(&app.noHeader, "no-header", false, "omit the header row in table/csv/tsv")
 	pf.StringVar(&app.template, "template", "", "Go text/template applied per record")
@@ -123,13 +127,65 @@ func (a *App) setup() error {
 	if !Format(a.output).Valid() {
 		return codeError(exitUsage, fmt.Errorf("unknown output format %q", a.output))
 	}
+	switch a.color {
+	case "", "auto", "always", "never":
+	default:
+		return codeError(exitUsage, fmt.Errorf("unknown color mode %q (want auto|always|never)", a.color))
+	}
 	a.client = douban.NewClient(a.cfg)
 	return nil
 }
 
 func (a *App) render(records any) error {
-	r := NewRenderer(os.Stdout, Format(a.output), a.fields, a.noHeader, a.template)
+	tty := isatty.IsTerminal(os.Stdout.Fd())
+	width := 0
+	if Format(a.output) == FormatTable || Format(a.output) == FormatMarkdown {
+		// Only the grid formats shrink to fit; machine formats stay lossless.
+		width = termWidth()
+	}
+	r, err := render.New(render.Options{
+		Format:   Format(a.output),
+		Fields:   a.fields,
+		NoHeader: a.noHeader,
+		Template: a.template,
+		Color:    colorEnabled(a.color, tty),
+		IsTTY:    tty,
+		Width:    width,
+		Writer:   os.Stdout,
+	})
+	if err != nil {
+		return codeError(exitUsage, err)
+	}
 	return r.Render(records)
+}
+
+// colorEnabled resolves --color against the terminal and the NO_COLOR
+// convention: auto colors only an interactive terminal, always forces it on,
+// never disables it. A pipe is not a TTY, so auto keeps `douban ... | jq` plain.
+func colorEnabled(mode string, tty bool) bool {
+	switch mode {
+	case "always":
+		return true
+	case "never":
+		return false
+	default:
+		return tty && os.Getenv("NO_COLOR") == ""
+	}
+}
+
+// termWidth reports the terminal width in columns, or 0 when stdout is not a
+// terminal. COLUMNS wins when set so the width is scriptable and testable.
+func termWidth() int {
+	if v := os.Getenv("COLUMNS"); v != "" {
+		var n int
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
+			return n
+		}
+	}
+	if w, _, err := term.GetSize(os.Stdout.Fd()); err == nil && w > 0 {
+		return w
+	}
+	return 0
 }
 
 func (a *App) renderOrEmpty(records any, n int) error {

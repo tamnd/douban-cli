@@ -57,7 +57,8 @@ Every command renders through one engine and shares these persistent flags:
 
 | Flag | Meaning |
 |---|---|
-| `-o, --output` | `table` (default), `json`, `jsonl`, `csv`, `tsv`, `url` |
+| `-o, --output` | `table` (default), `markdown`, `json`, `jsonl`, `csv`, `tsv`, `url`, `raw` |
+| `--color` | `auto` (default), `always`, `never`; honors `NO_COLOR` |
 | `--fields` | Comma-separated columns to keep |
 | `--no-header` | Drop the table/csv header row |
 | `--template` | Go text/template applied per record |

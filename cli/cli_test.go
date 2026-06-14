@@ -24,7 +24,7 @@ func TestRootHasAllSubcommands(t *testing.T) {
 
 func TestRootPersistentFlags(t *testing.T) {
 	pf := Root().PersistentFlags()
-	for _, name := range []string{"output", "fields", "no-header", "template", "limit", "quiet", "delay", "timeout", "retries", "user-agent"} {
+	for _, name := range []string{"output", "color", "fields", "no-header", "template", "limit", "quiet", "delay", "timeout", "retries", "user-agent"} {
 		if pf.Lookup(name) == nil {
 			t.Errorf("missing persistent flag %q", name)
 		}

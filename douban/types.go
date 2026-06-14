@@ -30,9 +30,9 @@ type Result struct {
 	Type     string `json:"type"`
 	Title    string `json:"title"`
 	Rating   string `json:"rating"`
-	Abstract string `json:"abstract"`
+	Abstract string `json:"abstract" table:",truncate"`
 	URL      string `json:"url"`
-	Cover    string `json:"cover,omitempty"`
+	Cover    string `json:"cover,omitempty" table:",truncate"`
 }
 
 // --- suggest (j/subject_suggest) ---
@@ -57,7 +57,7 @@ type Suggestion struct {
 	SubTitle string `json:"sub_title,omitempty"`
 	Year     string `json:"year,omitempty"`
 	URL      string `json:"url"`
-	Img      string `json:"img,omitempty"`
+	Img      string `json:"img,omitempty" table:",truncate"`
 }
 
 // --- book subject ---
@@ -78,9 +78,9 @@ type Book struct {
 	Series        string `json:"series,omitempty"`
 	ISBN          string `json:"isbn,omitempty"`
 	Rating        string `json:"rating"`
-	Summary       string `json:"summary,omitempty"`
+	Summary       string `json:"summary,omitempty" table:",truncate"`
 	URL           string `json:"url"`
-	Cover         string `json:"cover,omitempty"`
+	Cover         string `json:"cover,omitempty" table:",truncate"`
 }
 
 // --- movie rows (top250 / chart / coming / nowplaying) ---
@@ -96,12 +96,12 @@ type Movie struct {
 	Region    string `json:"region,omitempty"`
 	Genres    string `json:"genres,omitempty"`
 	Directors string `json:"directors,omitempty"`
-	Cast      string `json:"cast,omitempty"`
+	Cast      string `json:"cast,omitempty" table:",truncate"`
 	Duration  string `json:"duration,omitempty"`
 	Rating    string `json:"rating"`
 	URL       string `json:"url"`
-	Cover     string `json:"cover,omitempty"`
-	Quote     string `json:"quote,omitempty"`
+	Cover     string `json:"cover,omitempty" table:",truncate"`
+	Quote     string `json:"quote,omitempty" table:",truncate"`
 }
 
 // --- doulist ---
@@ -112,7 +112,7 @@ type DoulistItem struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
 	Rating   string `json:"rating"`
-	Abstract string `json:"abstract,omitempty"`
+	Abstract string `json:"abstract,omitempty" table:",truncate"`
 	URL      string `json:"url"`
-	Cover    string `json:"cover,omitempty"`
+	Cover    string `json:"cover,omitempty" table:",truncate"`
 }
