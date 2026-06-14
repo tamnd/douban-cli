@@ -1,4 +1,7 @@
-// Command douban is a single-binary command line for douban-cli.
+// Command douban is the single-binary command line for douban-cli. It hands the
+// kit App to kit.Run, which builds the CLI, the HTTP API (douban serve), and the
+// MCP server (douban mcp) from the one operation registry and maps errors to
+// stable exit codes.
 package main
 
 import (
@@ -7,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/charmbracelet/fang"
+	"github.com/tamnd/any-cli/kit"
 	"github.com/tamnd/douban-cli/cli"
 )
 
@@ -15,13 +18,5 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	root := cli.Root()
-	// fang gives styled help, errors, and shell completion for free; the command
-	// tree and its exit-code mapping stay in the cli package.
-	if err := fang.Execute(ctx, root,
-		fang.WithVersion(cli.Version),
-		fang.WithNotifySignal(os.Interrupt, syscall.SIGTERM),
-	); err != nil {
-		os.Exit(1)
-	}
+	os.Exit(kit.Run(ctx, cli.NewApp()))
 }

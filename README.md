@@ -11,6 +11,11 @@ the result. The **mirror** subsystem crawls the catalog into a local store so
 you can reconstruct Douban offline: every entity, the raw page bytes, and a
 normalized record per subject, all resumable and rate limited.
 
+The lookup commands are declared once on the
+[any-cli/kit](https://github.com/tamnd/any-cli) framework and exposed over three
+surfaces: the CLI, an HTTP API (`douban serve`), and an MCP server
+(`douban mcp`). A script, a service, and an AI agent all reach the same records.
+
 ## Install
 
 ```bash
@@ -80,6 +85,24 @@ douban search python -o json
 douban top250 -o jsonl | jq .url
 douban book 1084336 -o csv
 ```
+
+## Serve and MCP
+
+The same lookup commands are reachable over HTTP and MCP without a new client:
+
+```bash
+# HTTP: GET /v1/<command> with flags as query params
+douban serve --addr :8080
+curl 'http://localhost:8080/v1/suggest?query=matrix&type=movie&limit=2'
+curl 'http://localhost:8080/v1/book/1084336'
+
+# MCP server over stdio, exposing the seven lookups as tools
+douban mcp
+```
+
+`serve` mounts each command at `/v1/<command>`, adds `/healthz` and the OpenAPI
+document at `/v1/openapi.json`, and streams records as NDJSON. The mirror
+commands are CLI-only and are not exposed over HTTP or MCP.
 
 ## Mirror
 
