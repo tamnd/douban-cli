@@ -11,5 +11,5 @@ packages (deb, rpm, apk), a multi-arch container image on GHCR, and entries for
 the package managers. Binaries are pure Go, so there is nothing to install
 alongside them.
 
-No releases yet. Cut the first one with `git tag v0.1.0 && git push --tags`,
-then add a page here.
+- [v0.2.0](v0.2.0/) - the offline mirror: crawl Douban into a local store.
+- [v0.1.0](v0.1.0/) - the first release: read-only lookup commands.
