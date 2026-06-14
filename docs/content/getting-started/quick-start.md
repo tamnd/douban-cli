@@ -39,3 +39,16 @@ Every command prints a table by default and pipes straight into `jq` with
 ```bash
 douban top250 -o jsonl | jq .url
 ```
+
+Or build a local mirror you can query offline. Seed the frontier, crawl it,
+then export:
+
+```bash
+douban seed ids --type book --from 1084336 --to 1084340
+douban crawl --limit 20
+douban info
+douban export --type book -o jsonl | jq .
+```
+
+The crawl is resumable, so you can stop and resume it freely. See the
+[mirror guide](../../guides/mirror/) for the full workflow.
