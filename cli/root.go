@@ -61,8 +61,9 @@ func Root() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "douban",
-		Short: "Search Douban books, movies, and music (豆瓣)",
-		Long: `douban reads Douban (豆瓣) through its public search pages.
+		Short: "Crawl Douban (豆瓣) books and movies into structured records",
+		Long: `douban reads Douban (豆瓣) through its public pages: search, suggest,
+book detail, the film charts, now-playing, and curated lists (豆列).
 No API key is required. It returns records as table, JSON, JSONL,
 CSV, TSV, or URLs.
 
