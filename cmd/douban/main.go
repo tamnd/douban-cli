@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/charmbracelet/fang"
-	"github.com/tamnd/douban-cli-cli/cli"
+	"github.com/tamnd/douban-cli/cli"
 )
 
 func main() {

@@ -60,10 +60,10 @@ jobs:
 
       # Two builds, one per deploy target. The theme links every page and asset
       # with absURL, so each output carries its own base path: the Pages build
-      # gets the /douban-cli-cli/ sub-path, the Cloudflare build gets the domain root.
+      # gets the /douban-cli/ sub-path, the Cloudflare build gets the domain root.
       - name: Build for GitHub Pages
         working-directory: docs
-        run: tago build --base-url "https://tamnd.github.io/douban-cli-cli/" --output public-pages
+        run: tago build --base-url "https://tamnd.github.io/douban-cli/" --output public-pages
 
       # tago absURLs theme links but passes markdown content links through, so
       # root-relative links in content need the sub-path prefixed for the Pages
@@ -71,11 +71,11 @@ jobs:
       - name: Rewrite content links for the Pages sub-path
         run: |
           find docs/public-pages -name '*.html' -print0 |
-            xargs -0 perl -pi -e 's|(href=")/(?!/)|${1}/douban-cli-cli/|g; s|(src=")/(?!/)|${1}/douban-cli-cli/|g'
+            xargs -0 perl -pi -e 's|(href=")/(?!/)|${1}/douban-cli/|g; s|(src=")/(?!/)|${1}/douban-cli/|g'
 
       - name: Build for Cloudflare Pages
         working-directory: docs
-        run: tago build --base-url "https://douban-cli-cli.tamnd.com/" --output public-cf
+        run: tago build --base-url "https://douban-cli.tamnd.com/" --output public-cf
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5.0.0
@@ -104,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     concurrency:
-      group: cloudflare-pages-douban-cli-cli
+      group: cloudflare-pages-douban-cli
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6.0.2
@@ -122,7 +122,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: python3 scripts/ensure_cloudflare_pages.py --project douban-cli-cli --domain douban-cli-cli.tamnd.com --zone tamnd.com
+        run: python3 scripts/ensure_cloudflare_pages.py --project douban-cli --domain douban-cli.tamnd.com --zone tamnd.com
 
       - name: Deploy to Cloudflare Pages
         env:
@@ -130,6 +130,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           npx -y wrangler@4 pages deploy public-cf \
-            --project-name=douban-cli-cli \
+            --project-name=douban-cli \
             --branch=main \
             --commit-dirty=true

@@ -25,9 +25,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/tamnd/douban-cli-cli/cli.Version={{ .Version }}
-      - -X github.com/tamnd/douban-cli-cli/cli.Commit={{ .ShortCommit }}
-      - -X github.com/tamnd/douban-cli-cli/cli.Date={{ .CommitDate }}
+      - -X github.com/tamnd/douban-cli/cli.Version={{ .Version }}
+      - -X github.com/tamnd/douban-cli/cli.Commit={{ .ShortCommit }}
+      - -X github.com/tamnd/douban-cli/cli.Date={{ .CommitDate }}
     mod_timestamp: "{{ .CommitTimestamp }}"
     targets:
       - linux_amd64
@@ -56,7 +56,7 @@ nfpms:
     package_name: douban
     file_name_template: "{{ .ConventionalFileName }}"
     vendor: tamnd
-    homepage: https://github.com/tamnd/douban-cli-cli
+    homepage: https://github.com/tamnd/douban-cli
     maintainer: Duc-Tam Nguyen <tamnd87@gmail.com>
     description: Search Douban books, movies, and music (豆瓣)
     license: Apache-2.0
@@ -83,8 +83,8 @@ dockers_v2:
     labels:
       org.opencontainers.image.title: "{{ .ProjectName }}"
       org.opencontainers.image.description: "Search Douban books, movies, and music (豆瓣)"
-      org.opencontainers.image.url: "https://github.com/tamnd/douban-cli-cli"
-      org.opencontainers.image.source: "https://github.com/tamnd/douban-cli-cli"
+      org.opencontainers.image.url: "https://github.com/tamnd/douban-cli"
+      org.opencontainers.image.source: "https://github.com/tamnd/douban-cli"
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.licenses: "Apache-2.0"
@@ -96,7 +96,7 @@ homebrew_casks:
       name: homebrew-tap
       token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
     directory: Casks
-    homepage: https://github.com/tamnd/douban-cli-cli
+    homepage: https://github.com/tamnd/douban-cli
     description: Search Douban books, movies, and music (豆瓣)
     skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
     commit_author:
@@ -108,7 +108,7 @@ scoops:
       owner: tamnd
       name: scoop-bucket
       token: '{{ envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}'
-    homepage: https://github.com/tamnd/douban-cli-cli
+    homepage: https://github.com/tamnd/douban-cli
     description: Search Douban books, movies, and music (豆瓣)
     license: Apache-2.0
     skip_upload: '{{ if envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
@@ -168,6 +168,6 @@ changelog:
 release:
   github:
     owner: tamnd
-    name: douban-cli-cli
+    name: douban-cli
   draft: false
   prerelease: auto

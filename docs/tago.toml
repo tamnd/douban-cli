@@ -1,5 +1,5 @@
 title       = "douban"
-baseURL     = "https://douban-cli-cli.tamnd.com/"
+baseURL     = "https://douban-cli.tamnd.com/"
 description = "Search Douban books, movies, and music (豆瓣)"
 contentDir  = "content"
 outputDir   = "public"
@@ -7,4 +7,4 @@ theme       = "tago-doks"
 syntaxHighlight = "true"
 
 [params]
-github = "https://github.com/tamnd/douban-cli-cli"
+github = "https://github.com/tamnd/douban-cli"
